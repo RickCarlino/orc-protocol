@@ -165,6 +165,10 @@ Room object:
 }
 ```
 
+Name rules
+- Room `name` is globally unique across the server.
+- Uniqueness comparisons are case-insensitive. Servers MAY canonicalize stored casing.
+
 ### 5.2 Directory & Membership
 
 * Public rooms are discoverable and open to join.
@@ -294,7 +298,7 @@ Mentions & notify:
 * Client MAY batch acks:
 
 ```json
-{ "type":"ack", "cursors": { "room:<room_id>":12345, "dm:<user_id>":678 } }
+{ "type":"ack", "cursors": { "room:<room_name>":12345, "dm:<user_id>":678 } }
 ```
 
 ### 8.4 Resume
@@ -339,8 +343,8 @@ Client → Server:
 {
   "type": "hello",
   "client": { "name":"myclient", "version":"0.1" },
-  "subscriptions": { "rooms":["<room_id>","..."], "dms": true },
-  "cursors": { "room:<room_id>":12345, "dm:<user_id>":78 },
+  "subscriptions": { "rooms":["<room_name>","..."], "dms": true },
+  "cursors": { "room:<room_name>":12345, "dm:<user_id>":78 },
   "want": ["presence","typing","reactions"]   // optional
 }
 ```
@@ -379,7 +383,7 @@ Servers MAY send an initial `{"type":"ready"...}` immediately after connect to e
 
 **Endpoint:** `GET /search/messages`
 
-* Query parameters: `q` (required), `room_id?`, `dm_peer_id?`, `before_ts?`, `after_ts?`, `limit?`, `cursor?`
+* Query parameters: `q` (required), `room_name?`, `dm_peer_id?`, `before_ts?`, `after_ts?`, `limit?`, `cursor?`
 * **Baseline requirement:** substring match over `text` (case‑insensitive).
 
 **Response 200**
@@ -601,7 +605,7 @@ Server:
 4. Post
 
 ```http
-POST /rooms/r1/messages
+POST /rooms/general/messages
 Authorization: Bearer tA
 {"text":"hello **world**"}
 → 201 {"message_id":"m1","room_id":"r1","author_id":"u1","seq":1,"ts":"...","text":"hello **world**","content_type":"text/markdown","tombstone":false}
@@ -631,7 +635,7 @@ WS:
 6. Ack
 
 ```json
-{"type":"ack","cursors":{"room:r1":1}}
+{"type":"ack","cursors":{"room:general":1}}
 ```
 
 ### A.2 Thread, Delete Parent (Tombstone), Child Persists
@@ -725,11 +729,12 @@ components:
       description: Exclusive sequence number to backfill before, descending.
       required: false
       schema: { type: integer, minimum: 0 }
-    RoomId:
-      name: room_id
+    RoomName:
+      name: room_name
       in: path
       required: true
-      schema: { $ref: '#/components/schemas/Id' }
+      description: Globally unique room name (case-insensitive uniqueness). Servers MAY canonicalize.
+      schema: { type: string, minLength: 1, maxLength: 80 }
     UserId:
       name: user_id
       in: path
@@ -1542,7 +1547,7 @@ paths:
       tags: [Rooms]
       summary: Get a room
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       responses:
         '200':
           description: Room
@@ -1555,7 +1560,7 @@ paths:
       tags: [Rooms]
       summary: Update a room (owner/admin)
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       requestBody:
         required: true
         content:
@@ -1576,7 +1581,7 @@ paths:
       summary: List room members
       security: [{ BearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/RoomId'
+        - $ref: '#/components/parameters/RoomName'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Cursor'
       responses:
@@ -1597,7 +1602,7 @@ paths:
       tags: [Rooms]
       summary: Invite a user to a private room
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       requestBody:
         required: true
         content:
@@ -1613,7 +1618,7 @@ paths:
       tags: [Rooms]
       summary: Join a room
       security: [{ BearerAuth: [] }, {}]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/ErrorResponse' }
@@ -1624,7 +1629,7 @@ paths:
       tags: [Rooms]
       summary: Leave a room
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/ErrorResponse' }
@@ -1634,7 +1639,7 @@ paths:
       tags: [Rooms]
       summary: Pin a message
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       requestBody:
         required: true
         content:
@@ -1652,7 +1657,7 @@ paths:
       summary: Unpin a message
       security: [{ BearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/RoomId'
+        - $ref: '#/components/parameters/RoomName'
         - name: message_id
           in: query
           required: true
@@ -1665,7 +1670,7 @@ paths:
       tags: [Rooms]
       summary: Get role definitions for the room
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       responses:
         '200':
           description: Roles
@@ -1683,7 +1688,7 @@ paths:
       tags: [Rooms]
       summary: Assign a role to a user
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       requestBody:
         required: true
         content:
@@ -1700,7 +1705,7 @@ paths:
       summary: Read forward room history
       security: [{ BearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/RoomId'
+        - $ref: '#/components/parameters/RoomName'
         - $ref: '#/components/parameters/FromSeq'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1719,7 +1724,7 @@ paths:
       tags: [Messages]
       summary: Send a message to a room
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       requestBody:
         required: true
         content:
@@ -1739,7 +1744,7 @@ paths:
       summary: Backfill room history (reverse)
       security: [{ BearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/RoomId'
+        - $ref: '#/components/parameters/RoomName'
         - $ref: '#/components/parameters/BeforeSeq'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1760,7 +1765,7 @@ paths:
       tags: [Messages]
       summary: Advance the room cursor
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       requestBody:
         required: true
         content:
@@ -1774,7 +1779,7 @@ paths:
       tags: [Messages]
       summary: Read the room cursor
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       responses:
         '200':
           description: Cursor
@@ -2015,10 +2020,10 @@ paths:
           in: query
           required: true
           schema: { type: string }
-        - name: room_id
+        - name: room_name
           in: query
           required: false
-          schema: { $ref: '#/components/schemas/Id' }
+          schema: { type: string }
         - name: dm_peer_id
           in: query
           required: false
@@ -2214,7 +2219,7 @@ paths:
       tags: [Moderation]
       summary: Kick a user from a room
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       requestBody:
         required: true
         content:
@@ -2233,7 +2238,7 @@ paths:
       tags: [Moderation]
       summary: Ban a user in a room
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       requestBody:
         required: true
         content:
@@ -2248,7 +2253,7 @@ paths:
       summary: Unban a user in a room
       security: [{ BearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/RoomId'
+        - $ref: '#/components/parameters/RoomName'
         - $ref: '#/components/parameters/UserId'
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
@@ -2258,7 +2263,7 @@ paths:
       tags: [Moderation]
       summary: Mute a user in a room
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/RoomId' } ]
+      parameters: [ { $ref: '#/components/parameters/RoomName' } ]
       requestBody:
         required: true
         content:
@@ -2273,7 +2278,7 @@ paths:
       summary: Unmute a user in a room
       security: [{ BearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/RoomId'
+        - $ref: '#/components/parameters/RoomName'
         - $ref: '#/components/parameters/UserId'
       responses:
         '204': { $ref: '#/components/responses/NoContent' }

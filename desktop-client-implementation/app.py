@@ -82,36 +82,35 @@ class ApiClient:
             qs["cursor"] = cursor
         return _json_request("GET", self._u("/directory/rooms") + "?" + urllib.parse.urlencode(qs), self.token)
 
-    def join_room(self, room_id: str):
-        return _json_request("POST", self._u(f"/rooms/{room_id}/join"), self.token, {})
+    def join_room(self, room_name: str):
+        return _json_request("POST", self._u(f"/rooms/{room_name}/join"), self.token, {})
 
-    def get_room_messages(self, room_id: str, from_seq: int | None = None, limit: int = 100):
+    def get_room_messages(self, room_name: str, from_seq: int | None = None, limit: int = 100):
         qs = {}
         if from_seq is not None:
             qs["from_seq"] = str(from_seq)
         qs["limit"] = str(limit)
-        url = self._u(f"/rooms/{room_id}/messages") + ("?" + urllib.parse.urlencode(qs) if qs else "")
+        url = self._u(f"/rooms/{room_name}/messages") + ("?" + urllib.parse.urlencode(qs) if qs else "")
         return _json_request("GET", url, self.token)
 
-    def get_room_messages_backfill(self, room_id: str, before_seq: int | None = None, limit: int = 100):
+    def get_room_messages_backfill(self, room_name: str, before_seq: int | None = None, limit: int = 100):
         qs = {"limit": str(limit)}
         if before_seq is not None:
             qs["before_seq"] = str(before_seq)
-        url = self._u(f"/rooms/{room_id}/messages/backfill") + ("?" + urllib.parse.urlencode(qs) if qs else "")
+        url = self._u(f"/rooms/{room_name}/messages/backfill") + ("?" + urllib.parse.urlencode(qs) if qs else "")
         return _json_request("GET", url, self.token)
 
-    def post_room_message(self, room_id: str, text: str, content_type: str = "text/markdown"):
+    def post_room_message(self, room_name: str, text: str, content_type: str = "text/markdown"):
         body = {"text": text, "content_type": content_type}
-        return _json_request("POST", self._u(f"/rooms/{room_id}/messages"), self.token, body)
+        return _json_request("POST", self._u(f"/rooms/{room_name}/messages"), self.token, body)
 
-    def post_room_ack(self, room_id: str, seq: int):
+    def post_room_ack(self, room_name: str, seq: int):
         body = {"seq": int(seq)}
-        return _json_request("POST", self._u(f"/rooms/{room_id}/ack"), self.token, body)
+        return _json_request("POST", self._u(f"/rooms/{room_name}/ack"), self.token, body)
 
 
 @dataclass
 class RoomState:
-    room_id: str
     name: str
     next_seq: int = 0  # next from_seq to ask for
     last_seen_seq: int = 0  # last seq rendered/acked
@@ -123,7 +122,7 @@ class ChatApp:
         self.root.title("Open Rooms Chat — Minimal Client")
         self.api: ApiClient | None = None
         self.rooms: dict[str, RoomState] = {}
-        self.selected_room_id: str | None = None
+        self.selected_room_name: str | None = None
         self.rx_queue: Queue = Queue()
         self.poller_thread: threading.Thread | None = None
         self.stop_flag = threading.Event()
@@ -156,7 +155,7 @@ class ChatApp:
         left.pack(side="left", fill="y", padx=(8, 4), pady=(0, 8))
         left.pack_propagate(False)
 
-        ttk.Label(left, text="Rooms").pack(anchor="w")
+        ttk.Label(left, text="Rooms (by name)").pack(anchor="w")
         self.rooms_list = tk.Listbox(left, height=15)
         self.rooms_list.pack(fill="both", expand=True)
         self.rooms_list.bind("<<ListboxSelect>>", self.on_select_room)
@@ -231,57 +230,58 @@ class ChatApp:
         self.rooms_list.delete(0, "end")
         self.rooms.clear()
         for r in rooms:
-            room_id = r.get("room_id")
-            name = r.get("name", room_id)
-            self.rooms[room_id] = RoomState(room_id=room_id, name=name)
-            self.rooms_list.insert("end", f"{name} ({room_id})")
+            name = r.get("name")
+            if not name:
+                continue
+            self.rooms[name] = RoomState(name=name)
+            self.rooms_list.insert("end", f"{name}")
 
     def on_select_room(self, event=None):
         sel = self.rooms_list.curselection()
         if not sel:
             return
         idx = sel[0]
-        # Map index back to room_id
-        room_id = list(self.rooms.keys())[idx]
-        self.selected_room_id = room_id
-        rs = self.rooms[room_id]
+        # Map index back to room name
+        room_name = list(self.rooms.keys())[idx]
+        self.selected_room_name = room_name
+        rs = self.rooms[room_name]
         self.chat.configure(state="normal")
         self.chat.delete("1.0", "end")
         self.chat.configure(state="disabled")
         self.log(f"[system] Opened room {rs.name}")
         # Load recent history via backfill (latest page)
-        threading.Thread(target=self._load_initial_history, args=(rs.room_id,), daemon=True).start()
+        threading.Thread(target=self._load_initial_history, args=(rs.name,), daemon=True).start()
 
     def on_join_room(self):
         if not self.api:
             messagebox.showinfo("Not logged in", "Login first")
             return
-        room_id = self.join_room_var.get().strip()
-        if not room_id:
-            messagebox.showerror("Join Room", "Enter room_id to join (public)")
+        room_name = self.join_room_var.get().strip()
+        if not room_name:
+            messagebox.showerror("Join Room", "Enter room name to join (public)")
             return
         try:
-            self.api.join_room(room_id)
-            self.log(f"[system] Joined room {room_id}")
+            self.api.join_room(room_name)
+            self.log(f"[system] Joined room {room_name}")
             # Add to list and select
-            self.rooms[room_id] = RoomState(room_id=room_id, name=room_id)
-            self.rooms_list.insert("end", f"{room_id} ({room_id})")
-            # Auto-select the newly joined room and load history
-            self.selected_room_id = room_id
+            self.rooms[room_name] = RoomState(name=room_name)
+            self.rooms_list.insert("end", f"{room_name}")
+            # Auto-select newly joined room and load history
+            self.selected_room_name = room_name
             self.rooms_list.selection_clear(0, "end")
             self.rooms_list.selection_set("end")
-            threading.Thread(target=self._load_initial_history, args=(room_id,), daemon=True).start()
+            threading.Thread(target=self._load_initial_history, args=(room_name,), daemon=True).start()
         except Exception as e:
             messagebox.showerror("Join failed", str(e))
 
     def on_send(self):
-        if not self.api or not self.selected_room_id:
+        if not self.api or not self.selected_room_name:
             return
         text = self.entry_var.get().strip()
         if not text:
             return
         try:
-            msg = self.api.post_room_message(self.selected_room_id, text)
+            msg = self.api.post_room_message(self.selected_room_name, text)
             # Render immediately; server will echo in polling
             self._render_message(msg.get("message", msg))
             self.entry_var.set("")
@@ -308,12 +308,12 @@ class ChatApp:
         if not self.api:
             return
         # Only poll the selected room to keep it simple
-        room_id = self.selected_room_id
-        if not room_id:
+        room_name = self.selected_room_name
+        if not room_name:
             return
-        rs = self.rooms.get(room_id)
+        rs = self.rooms.get(room_name)
         from_seq = rs.next_seq if rs.next_seq > 0 else None
-        resp = self.api.get_room_messages(room_id, from_seq=from_seq, limit=100)
+        resp = self.api.get_room_messages(room_name, from_seq=from_seq, limit=100)
         messages = resp.get("messages", [])
         next_seq = resp.get("next_seq", rs.next_seq)
         for m in messages:
@@ -322,7 +322,7 @@ class ChatApp:
         rs.next_seq = int(next_seq or rs.next_seq)
         if rs.last_seen_seq:
             try:
-                self.api.post_room_ack(room_id, rs.last_seen_seq)
+                self.api.post_room_ack(room_name, rs.last_seen_seq)
             except Exception:
                 # Ignore ack failures in minimal client
                 pass
@@ -347,15 +347,15 @@ class ChatApp:
         line = f"[{seq}] {author}: {text}"
         self.log(line)
 
-    def _load_initial_history(self, room_id: str):
+    def _load_initial_history(self, room_name: str):
         # Fetch latest page via backfill and render chronologically
         try:
-            resp = self.api.get_room_messages_backfill(room_id, before_seq=None, limit=100)
+            resp = self.api.get_room_messages_backfill(room_name, before_seq=None, limit=100)
             messages = resp.get("messages", [])
             # backfill returns reverse chronological; render oldest first
             for m in reversed(messages):
                 self.rx_queue.put(("message", m))
-                rs = self.rooms.get(room_id)
+                rs = self.rooms.get(room_name)
                 if rs:
                     seq = int(m.get("seq", 0))
                     rs.last_seen_seq = max(rs.last_seen_seq, seq)

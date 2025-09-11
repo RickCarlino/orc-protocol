@@ -103,28 +103,21 @@ export class ApiClient {
     });
   }
 
-  joinRoom(room_id: string) {
-    return fetch(this.cfg.baseUrl + `/rooms/${encodeURIComponent(room_id)}/join`, {
+  joinRoom(name: string) {
+    return fetch(this.cfg.baseUrl + `/rooms/${encodeURIComponent(name)}/join`, {
       method: 'POST',
       headers: this.headers(),
     });
   }
 
-  joinRoomByName(name: string) {
-    return fetch(this.cfg.baseUrl + `/rooms/by-name/${encodeURIComponent(name)}/join`, {
-      method: 'POST',
+  roomCursor(name: string) {
+    return this.json<{ seq: number }>(`/rooms/${encodeURIComponent(name)}/cursor`, {
       headers: this.headers(),
     });
   }
 
-  roomCursor(room_id: string) {
-    return this.json<{ seq: number }>(`/rooms/${encodeURIComponent(room_id)}/cursor`, {
-      headers: this.headers(),
-    });
-  }
-
-  ackRoom(room_id: string, seq: number) {
-    return fetch(this.cfg.baseUrl + `/rooms/${encodeURIComponent(room_id)}/ack`, {
+  ackRoom(name: string, seq: number) {
+    return fetch(this.cfg.baseUrl + `/rooms/${encodeURIComponent(name)}/ack`, {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify({ seq }),
@@ -132,26 +125,26 @@ export class ApiClient {
   }
 
   // Messages (rooms)
-  roomMessages(room_id: string, from_seq?: number, limit = 50) {
+  roomMessages(name: string, from_seq?: number, limit = 50) {
     const qs = new URLSearchParams();
     if (from_seq != null) qs.set('from_seq', String(from_seq));
     if (limit != null) qs.set('limit', String(limit));
-    return this.json<PaginatedMessages>(`/rooms/${encodeURIComponent(room_id)}/messages?${qs.toString()}`, {
+    return this.json<PaginatedMessages>(`/rooms/${encodeURIComponent(name)}/messages?${qs.toString()}`, {
       headers: this.headers(),
     });
   }
 
-  roomMessagesBackfill(room_id: string, before_seq?: number, limit = 50) {
+  roomMessagesBackfill(name: string, before_seq?: number, limit = 50) {
     const qs = new URLSearchParams();
     if (before_seq != null) qs.set('before_seq', String(before_seq));
     if (limit != null) qs.set('limit', String(limit));
-    return this.json<PaginatedMessages>(`/rooms/${encodeURIComponent(room_id)}/messages/backfill?${qs.toString()}`, {
+    return this.json<PaginatedMessages>(`/rooms/${encodeURIComponent(name)}/messages/backfill?${qs.toString()}`, {
       headers: this.headers(),
     });
   }
 
-  sendRoomMessage(room_id: string, text: string) {
-    return this.json<{ message: unknown }>(`/rooms/${encodeURIComponent(room_id)}/messages`, {
+  sendRoomMessage(name: string, text: string) {
+    return this.json<{ message: unknown }>(`/rooms/${encodeURIComponent(name)}/messages`, {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify({ text }),

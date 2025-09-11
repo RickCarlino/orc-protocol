@@ -194,7 +194,7 @@ export function App() {
       const r = rooms.find((x: Room) => x.room_id === room_id);
       if (!r) return;
       setCurrentRoom(r);
-      await loadRecentMessages(r.room_id);
+      await loadRecentMessages(r.name);
     },
     [rooms]
   );
@@ -203,7 +203,7 @@ export function App() {
     async (name: string) => {
       if (!serverUrl) return alert('Set server URL first');
       try {
-        await api.joinRoomByName(name);
+        await api.joinRoom(name);
         await refreshRooms();
         // select by name
         const latest = await api.myRooms();
@@ -218,14 +218,14 @@ export function App() {
   );
 
   const loadRecentMessages = useCallback(
-    async (room_id: string) => {
+    async (roomName: string) => {
       try {
         const BIG = Number.MAX_SAFE_INTEGER;
-        const res = await api.roomMessagesBackfill(room_id, BIG, 50);
+        const res = await api.roomMessagesBackfill(roomName, BIG, 50);
         setMessages(res.messages.slice().reverse());
       } catch (e) {
         try {
-          const res2 = await api.roomMessages(room_id, 1, 50);
+          const res2 = await api.roomMessages(roomName, 1, 50);
           setMessages(res2.messages);
         } catch (e2) {
           alert('Load messages failed: ' + (e2 as Error).message);
@@ -239,7 +239,7 @@ export function App() {
     async (text: string) => {
       if (!currentRoom) return;
       try {
-        const res = await api.sendRoomMessage(currentRoom.room_id, text);
+        const res = await api.sendRoomMessage(currentRoom.name, text);
         // Optimistically append; WS will confirm too
         const msg = (res as any).message ?? res;
         setMessages((prev) => [...prev, msg]);
@@ -273,8 +273,8 @@ export function App() {
         <div className="ml-auto text-xs text-slate-500 flex items-center gap-2">
           {currentRoom ? (
             <>
-              <span>room_id:</span>
-              <code className="px-1.5 py-0.5 rounded bg-slate-100">{currentRoom.room_id}</code>
+              <span>room:</span>
+              <code className="px-1.5 py-0.5 rounded bg-slate-100">{currentRoom.name}</code>
             </>
           ) : null}
         </div>
@@ -315,7 +315,7 @@ export function App() {
           rooms={rooms}
           onRefresh={refreshRooms}
           onCreate={createRoom}
-          onSelect={selectRoom}
+          onSelect={(rid) => selectRoom(rid)}
           onJoin={joinRoomByName}
           currentId={currentRoom?.room_id}
         />

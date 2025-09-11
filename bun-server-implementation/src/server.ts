@@ -135,10 +135,11 @@ async function handleRequest(req: Request, server: any) {
     return jsonResponse({ room }, { status: 201 });
   }
 
-  const mRoom = matchPath(pathname, /^\/rooms\/([a-z2-7]+)$/);
+  const mRoom = matchPath(pathname, /^\/rooms\/([^/]+)$/);
   if (mRoom) {
-    const room_id = mRoom[1] as Id;
-    if (!rooms.has(room_id)) return error("not_found", "room not found", 404);
+    const room_name = decodeURIComponent(mRoom[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+    if (!room_id || !rooms.has(room_id)) return error("not_found", "room not found", 404);
     if (req.method === "GET") {
       return ok({ room: rooms.get(room_id) });
     }
@@ -162,67 +163,58 @@ async function handleRequest(req: Request, server: any) {
     }
   }
 
-  const mMembers = matchPath(pathname, /^\/rooms\/([a-z2-7]+)\/members$/);
+  const mMembers = matchPath(pathname, /^\/rooms\/([^/]+)\/members$/);
   if (mMembers && req.method === "GET") {
-    const room_id = mMembers[1] as Id;
+    const room_name = decodeURIComponent(mMembers[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+    if (!room_id) return error("not_found", "room not found", 404);
     const map = roomMembers.get(room_id) || new Map();
     const members: MemberEntry[] = [...map.entries()].map(([user_id, role]) => ({ user_id, role }));
     return ok({ members, next_cursor: undefined });
   }
 
-  const mInvite = matchPath(pathname, /^\/rooms\/([a-z2-7]+)\/invite$/);
+  const mInvite = matchPath(pathname, /^\/rooms\/([^/]+)\/invite$/);
   if (mInvite && req.method === "POST") {
     const u = requireAuth(req);
     if (u instanceof Response) return u;
-    const room_id = mInvite[1] as Id;
+    const room_name = decodeURIComponent(mInvite[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+    if (!room_id) return error("not_found", "room not found", 404);
     const body = await readJson<{ user_id: Id }>(req);
     if (!body?.user_id) return error("bad_request", "missing user_id");
     addMember(room_id, body.user_id, "member");
     return noContent();
   }
 
-  const mJoin = matchPath(pathname, /^\/rooms\/([a-z2-7]+)\/join$/);
+  const mJoin = matchPath(pathname, /^\/rooms\/([^/]+)\/join$/);
   if (mJoin && req.method === "POST") {
     const u = requireAuth(req);
     if (u instanceof Response) return u;
-    const room_id = mJoin[1] as Id;
-    addMember(room_id, u.user_id, "member");
+    const room_name = decodeURIComponent(mJoin[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+    if (!room_id) return error("not_found", "room not found", 404);
+    addMember(room_id as Id, u.user_id, "member");
     return noContent();
   }
 
-  // By-name endpoints
-  const mRoomByName = matchPath(pathname, /^\/rooms\/by-name\/([^/]+)$/);
-  if (mRoomByName && req.method === "GET") {
-    const name = decodeURIComponent(mRoomByName[1]);
-    const rid = roomByName.get(normalizeRoomName(name));
-    if (!rid) return error("not_found", "room not found", 404);
-    return ok({ room: rooms.get(rid) });
-  }
+  // By-name endpoints removed; /rooms/{room_name} is canonical.
 
-  const mJoinByName = matchPath(pathname, /^\/rooms\/by-name\/([^/]+)\/join$/);
-  if (mJoinByName && req.method === "POST") {
-    const u = requireAuth(req);
-    if (u instanceof Response) return u;
-    const name = decodeURIComponent(mJoinByName[1]);
-    const rid = roomByName.get(normalizeRoomName(name));
-    if (!rid) return error("not_found", "room not found", 404);
-    addMember(rid as Id, u.user_id, "member");
-    return noContent();
-  }
-
-  const mLeave = matchPath(pathname, /^\/rooms\/([a-z2-7]+)\/leave$/);
+  const mLeave = matchPath(pathname, /^\/rooms\/([^/]+)\/leave$/);
   if (mLeave && req.method === "POST") {
     const u = requireAuth(req);
     if (u instanceof Response) return u;
-    const room_id = mLeave[1] as Id;
-    removeMember(room_id, u.user_id);
+    const room_name = decodeURIComponent(mLeave[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+    if (!room_id) return error("not_found", "room not found", 404);
+    removeMember(room_id as Id, u.user_id);
     return noContent();
   }
 
-  const mPins = matchPath(pathname, /^\/rooms\/([a-z2-7]+)\/pins$/);
+  const mPins = matchPath(pathname, /^\/rooms\/([^/]+)\/pins$/);
   if (mPins) {
-    const room_id = mPins[1] as Id;
-    const room = rooms.get(room_id);
+    const room_name = decodeURIComponent(mPins[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+    const room = room_id ? rooms.get(room_id) : undefined;
     if (!room) return error("not_found", "room not found", 404);
     if (req.method === "POST") {
       const body = await readJson<{ message_id: Id }>(req);
@@ -233,16 +225,17 @@ async function handleRequest(req: Request, server: any) {
     if (req.method === "DELETE") {
       const message_id = (searchParams.get("message_id") || "") as Id;
       room.pinned_message_ids = room.pinned_message_ids.filter((m) => m !== message_id);
-      rooms.set(room_id, room);
+      rooms.set(room_id as Id, room);
       return noContent();
     }
   }
 
   // Room messages
-  const mRoomMsgs = matchPath(pathname, /^\/rooms\/([a-z2-7]+)\/messages$/);
+  const mRoomMsgs = matchPath(pathname, /^\/rooms\/([^/]+)\/messages$/);
   if (mRoomMsgs) {
-    const room_id = mRoomMsgs[1] as Id;
-    if (!rooms.has(room_id)) return error("not_found", "room not found", 404);
+    const room_name = decodeURIComponent(mRoomMsgs[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+    if (!room_id || !rooms.has(room_id)) return error("not_found", "room not found", 404);
     if (req.method === "GET") {
       const fromSeq = Number(searchParams.get("from_seq") || 0);
       const limit = Math.max(1, Math.min(200, Number(searchParams.get("limit") || 50)));
@@ -281,12 +274,14 @@ async function handleRequest(req: Request, server: any) {
     }
   }
 
-  const mRoomBackfill = matchPath(pathname, /^\/rooms\/([a-z2-7]+)\/messages\/backfill$/);
+  const mRoomBackfill = matchPath(pathname, /^\/rooms\/([^/]+)\/messages\/backfill$/);
   if (mRoomBackfill && req.method === "GET") {
-    const room_id = mRoomBackfill[1] as Id;
+    const room_name = decodeURIComponent(mRoomBackfill[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+    if (!room_id) return error("not_found", "room not found", 404);
     const before = Number(searchParams.get("before_seq") || Number.MAX_SAFE_INTEGER);
     const limit = Math.max(1, Math.min(200, Number(searchParams.get("limit") || 50)));
-    const arr = roomMessages.get(room_id) || [];
+    const arr = roomMessages.get(room_id as Id) || [];
     const slice = arr.filter((m) => m.seq < before).slice(-limit);
     const first = slice.length > 0 ? slice[0] : undefined;
     const prev_seq = first ? first.seq : 0;
@@ -371,24 +366,26 @@ async function handleRequest(req: Request, server: any) {
   }
 
   // Cursors (rooms)
-  const mAckRoom = matchPath(pathname, /^\/rooms\/([a-z2-7]+)\/ack$/);
+  const mAckRoom = matchPath(pathname, /^\/rooms\/([^/]+)\/ack$/);
   if (mAckRoom && req.method === "POST") {
     const u = requireAuth(req);
     if (u instanceof Response) return u;
-    const room_id = mAckRoom[1] as Id;
+    const room_name = decodeURIComponent(mAckRoom[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
     const body = await readJson<{ seq: number }>(req);
     if (!body) return error("bad_request", "invalid json");
-    let map = roomCursors.get(room_id);
-    if (!map) roomCursors.set(room_id, (map = new Map()));
+    let map = roomCursors.get(room_id as Id);
+    if (!map) roomCursors.set(room_id as Id, (map = new Map()));
     map.set(u.user_id, body.seq);
     return noContent();
   }
-  const mCurRoom = matchPath(pathname, /^\/rooms\/([a-z2-7]+)\/cursor$/);
+  const mCurRoom = matchPath(pathname, /^\/rooms\/([^/]+)\/cursor$/);
   if (mCurRoom && req.method === "GET") {
     const u = requireAuth(req);
     if (u instanceof Response) return u;
-    const room_id = mCurRoom[1] as Id;
-    const seq = roomCursors.get(room_id)?.get(u.user_id) || 0;
+    const room_name = decodeURIComponent(mCurRoom[1]!);
+    const room_id = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+    const seq = roomCursors.get(room_id as Id)?.get(u.user_id) || 0;
     return ok({ seq });
   }
 
@@ -414,7 +411,7 @@ async function handleRequest(req: Request, server: any) {
     if (!u) return error("unauthorized", "missing or invalid token", 401);
     const q = (searchParams.get("q") || "").toLowerCase();
     if (!q) return error("bad_request", "missing q");
-    const room_id = (searchParams.get("room_id") || "") as Id;
+    const room_name = (searchParams.get("room_name") || "");
     const dm_peer_id = (searchParams.get("dm_peer_id") || "") as Id;
     const before_ts = searchParams.get("before_ts");
     const after_ts = searchParams.get("after_ts");
@@ -427,8 +424,9 @@ async function handleRequest(req: Request, server: any) {
       return true;
     };
 
-    if (room_id) {
-      const arr = roomMessages.get(room_id) || [];
+    if (room_name) {
+      const rid = roomByName.get(normalizeRoomName(room_name)) as Id | undefined;
+      const arr = rid ? roomMessages.get(rid) || [] : [];
       for (const m of arr) if (m.text.toLowerCase().includes(q) && inTsRange(m.ts)) matches.push({ message: m, score: 1.0 });
     } else {
       for (const [rid, arr] of roomMessages) {

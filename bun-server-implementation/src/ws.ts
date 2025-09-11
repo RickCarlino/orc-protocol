@@ -1,5 +1,6 @@
 import { nowTs, newId128 } from "./utils";
 import type { Id, Message } from "./types";
+import { roomByName, rooms, normalizeRoomName } from "./state";
 
 export interface ClientHello {
   type: "hello";
@@ -56,8 +57,17 @@ export function attachSocket(ws: Socket, user_id: Id): void {
       const msg = JSON.parse(String(e.data)) as Incoming;
       if (msg && (msg as any).type === "hello") {
         const sub = (msg as any as ClientHello).subscriptions || {};
-        const rooms = new Set<Id>(sub.rooms || []);
-        ws.data.rooms = rooms;
+        const desired = sub.rooms || [];
+        const resolved = new Set<Id>();
+        for (const r of desired) {
+          if (/^[a-z2-7]+$/.test(r) && rooms.has(r as Id)) {
+            resolved.add(r as Id);
+          } else {
+            const rid = roomByName.get(normalizeRoomName(r));
+            if (rid) resolved.add(rid);
+          }
+        }
+        ws.data.rooms = resolved;
         ws.data.dms = !!sub.dms;
         // announce readiness
         ws.send(

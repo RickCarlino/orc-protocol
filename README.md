@@ -1,8 +1,22 @@
+![ORC Web Client](./orc-web.png)
+
+![ORC Desktop Client](./orc-desktop.png)
+
 ## What is ORC?
 
 (This page discusses ideas. For the specification, see [the spec](./SPEC.md))
 
 Open Rooms Chat Protocl (ORC) is a new protocol for small group discussion. It is heavier than IRC, but lighter than XMPP, Matrix and more open than Slack, Dicord while offering features missing from older protocols and expected by modern users.
+
+# Project Status
+
+Ideated on 8 Sepetember 2025.
+
+This repo contains an in-memory only (no DB) test server implementation, a desktop client and a web client.
+
+There are lots of bugs. You can even see a bug in the screenshot above (did you find it?)
+
+What I really want is for people to suggest ideas, find contradictions in the spec and think of ways to make the protocol simpler and welcoming to a diverse ecosystem of clients servers and tools.
 
 # Why?
 

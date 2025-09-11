@@ -176,8 +176,8 @@ This protocol should do the same: focus on a core set of features that are usefu
 * WebRTC (too heavy)
 * XML (outdated & cumbersome)
 * Always-online requirements (bad for casuals)
-* JavaScript runtimes as dependencies (similar issues with WebRTC)
-* End-to-end encryption (not the use case)
+* JavaScript runtimes or HTML renderers as dependencies (similar issues with WebRTC)
+* End-to-end encryption (not our case)
 * Peer-to-peer (same)
 
 ## Closing Thoughts

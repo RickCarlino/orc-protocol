@@ -8,7 +8,7 @@
 
 Open Rooms Chat Protocl (ORC) is a new protocol for small group discussion. It is heavier than IRC, but lighter than XMPP, Matrix and more open than Slack, Dicord while offering features missing from older protocols and expected by modern users.
 
-# Project Status
+# Project Status: Idea Phase
 
 Ideated on 8 Sepetember 2025.
 

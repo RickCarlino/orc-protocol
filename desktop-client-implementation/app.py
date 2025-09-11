@@ -66,8 +66,8 @@ class ApiClient:
         return _json_request("GET", self._u("/meta/capabilities"), self.token)
 
     # Auth
-    def auth_guest(self):
-        return _json_request("POST", self._u("/auth/guest"), None, {})
+    def auth_guest(self, username: str):
+        return _json_request("POST", self._u("/auth/guest"), None, {"username": username})
 
     # Rooms
     def get_my_rooms(self, limit: int = 100, cursor: str | None = None):
@@ -141,6 +141,11 @@ class ChatApp:
         self.server_entry = ttk.Entry(top, textvariable=self.server_var, width=40)
         self.server_entry.pack(side="left", padx=(4, 8))
 
+        ttk.Label(top, text="Username:").pack(side="left", padx=(8, 0))
+        self.username_var = tk.StringVar(value="")
+        self.username_entry = ttk.Entry(top, textvariable=self.username_var, width=20)
+        self.username_entry.pack(side="left", padx=(4, 8))
+
         self.auth_btn = ttk.Button(top, text="Guest Login", command=self.on_guest_login)
         self.auth_btn.pack(side="left")
 
@@ -206,9 +211,13 @@ class ChatApp:
             messagebox.showerror("Error", "Enter server URL")
             return
         self.api = ApiClient(base_url=base)
+        username = self.username_var.get().strip()
+        if not username:
+            messagebox.showerror("Error", "Enter a username")
+            return
         try:
             self.set_status("Contacting server…")
-            resp = self.api.auth_guest()
+            resp = self.api.auth_guest(username)
             self.api.token = resp.get("access_token")
             user = resp.get("user", {})
             self.set_status(f"Logged in as {user.get('display_name','guest')}")

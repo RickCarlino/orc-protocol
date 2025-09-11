@@ -36,7 +36,6 @@ function capResponse() {
     capabilities: [
       "auth.guest",
       "uploads",
-      "security.insecure_ok",
       "search.basic",
     ],
     limits: {
@@ -63,7 +62,15 @@ async function handleRequest(req: Request, server: any) {
 
   // Auth (guest)
   if (req.method === "POST" && pathname === "/auth/guest") {
-    const tok = createGuestToken();
+    type Body = { username?: string };
+    const body = await readJson<Body>(req);
+    const raw = (body?.username || "").trim();
+    if (!raw) return error("bad_request", "missing username");
+    // Basic validation; allow letters, digits, underscore, hyphen, dot; 1-32 chars
+    if (!/^[a-zA-Z0-9._-]{1,32}$/.test(raw)) {
+      return error("bad_request", "invalid username; use letters, digits, . _ - (max 32)");
+    }
+    const tok = createGuestToken(raw);
     const user = users.get(tok.user_id)!;
     return ok({ access_token: tok.access_token, user });
   }

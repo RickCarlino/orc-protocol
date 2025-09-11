@@ -12,6 +12,7 @@ export function App() {
   const [accessToken, setAccessToken] = useState<string | undefined>();
   const [refreshToken, setRefreshToken] = useState<string | undefined>();
   const [sessionId, setSessionId] = useState<string | undefined>();
+  const [guestUsername, setGuestUsername] = useState<string>("");
 
   // Data state
   const [serverReady, setServerReady] = useState(false);
@@ -143,14 +144,16 @@ export function App() {
 
   const guestLogin = useCallback(async () => {
     if (!serverUrl) return alert('Set server URL first');
+    const uname = guestUsername.trim();
+    if (!uname) return alert('Enter a username');
     try {
-      const res = await api.authGuest();
+      const res = await api.authGuest(uname);
       setAccessToken(res.access_token);
       await refreshRooms();
     } catch (e) {
       alert('Guest login failed: ' + (e as Error).message);
     }
-  }, [api, serverUrl]);
+  }, [api, serverUrl, guestUsername]);
 
   const logout = useCallback(async () => {
     try {
@@ -300,7 +303,13 @@ export function App() {
         </div>
 
         <div className="p-3 border-b space-y-2">
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <input
+              placeholder="username"
+              className="flex-1 text-sm rounded border px-2 py-1"
+              value={guestUsername}
+              onChange={(e: any) => setGuestUsername(e.target.value)}
+            />
             <button onClick={guestLogin} className="px-2 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-700">
               Guest Login
             </button>

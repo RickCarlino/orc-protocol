@@ -47,7 +47,7 @@ export function attachSocket(ws: Socket, user_id: Id): void {
         session_id: ws.data.session_id,
         heartbeat_ms: heartbeatMs,
         server_time: nowTs(),
-        capabilities: ["uploads", "security.insecure_ok", "search.basic"],
+        capabilities: ["uploads", "search.basic"],
       }),
     );
   } catch {}
@@ -76,7 +76,7 @@ export function attachSocket(ws: Socket, user_id: Id): void {
             session_id: ws.data.session_id,
             heartbeat_ms: heartbeatMs,
             server_time: nowTs(),
-            capabilities: ["uploads", "security.insecure_ok", "search.basic"],
+            capabilities: ["uploads", "search.basic"],
           }),
         );
         updateSubscriptions(ws);

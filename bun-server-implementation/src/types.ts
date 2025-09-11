@@ -21,6 +21,8 @@ export interface ErrorBody {
 
 export interface User {
   user_id: Id;
+  // Optional username (for guest or password accounts). Not globally enforced here.
+  username?: string;
   display_name: string;
   photo_cid?: Id;
   bio?: string;
@@ -128,4 +130,3 @@ export type JsonValue =
   | null
   | { [k: string]: JsonValue }
   | JsonValue[];
-

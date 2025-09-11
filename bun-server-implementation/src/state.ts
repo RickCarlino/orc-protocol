@@ -16,6 +16,8 @@ import type {
 export const users = new Map<Id, User>();
 export const tokens = new Map<string, TokenRecord>();
 export const sessions = new Map<Id, SessionInfo>();
+// Track claimed usernames (case-insensitive) → user_id
+export const usernames = new Map<string, Id>();
 
 export const rooms = new Map<Id, Room>();
 export const roomByName = new Map<string, Id>(); // normalized name -> room_id
@@ -32,16 +34,22 @@ export const uploads = new Map<Id, UploadMeta>();
 export interface TicketRec { user_id: Id; expires_at: number; used: boolean }
 export const wsTickets = new Map<string, TicketRec>();
 
-export function ensureUser(user?: User): User {
-  if (user) return user;
+export function createGuestUser(username: string): User {
+  const norm = normalizeUsername(username);
+  const existing = usernames.get(norm);
+  if (existing) {
+    // Reuse existing user for the same username (simple policy for demo)
+    return users.get(existing)!;
+  }
   const uid = newId128();
-  const u: User = { user_id: uid, display_name: `Guest ${uid.slice(0, 6)}` };
-  users.set(uid, u);
-  return u;
+  const user: User = { user_id: uid, username, display_name: username };
+  users.set(uid, user);
+  usernames.set(norm, uid);
+  return user;
 }
 
-export function createGuestToken(): TokenRecord {
-  const user = ensureUser();
+export function createGuestToken(username: string): TokenRecord {
+  const user = createGuestUser(username);
   const access_token = newId128();
   const rec: TokenRecord = { access_token, user_id: user.user_id, created_at: nowTs() };
   tokens.set(access_token, rec);
@@ -109,5 +117,9 @@ export function ensureDmPair(a: Id, b: Id): string {
 }
 
 export function normalizeRoomName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+export function normalizeUsername(name: string): string {
   return name.trim().toLowerCase();
 }

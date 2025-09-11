@@ -53,11 +53,11 @@ export class ApiClient {
   }
 
   // Auth
-  authGuest() {
+  authGuest(username: string) {
     return this.json<AuthGuestResponse>('/auth/guest', {
       method: 'POST',
       headers: this.headers(),
-      body: JSON.stringify({}),
+      body: JSON.stringify({ username }),
     });
   }
 

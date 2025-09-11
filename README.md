@@ -1,8 +1,10 @@
-## Introduction
+## What is ORC?
 
-(This page discusses ideas. For the specification, see [[ORC Draft Spec]])
+(This page discusses ideas. For the specification, see [the spec](./SPEC.md))
 
 Open Rooms Chat Protocl (ORC) is a new protocol for small group discussion. It is heavier than IRC, but lighter than XMPP, Matrix and more open than Slack, Dicord while offering features missing from older protocols and expected by modern users.
+
+# Why?
 
 Why another messaging system? The internet is still missing a Free (as in freedom, or maybe fun) chat protocol that is full-featured enough for serious use by a general audience but light weight enough to be customized and self managed.
 

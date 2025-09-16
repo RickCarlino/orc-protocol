@@ -37,7 +37,7 @@ The protocol is designed to be:
 ## 1. Transport
 
 * **HTTP(S)** for resource CRUD (auth, users, rooms, search, uploads, notifications registration).
-* **WebSocket (WS/WSS)** for real‑time events and cursor acks.
+* **WebSocket (WS/WSS)** for real‑time events and cursor acks for all streams relevant to the user (all joined rooms and DMs).
   * Authentication uses short‑lived tickets minted via `POST /rtm/ticket` (see §9.0).
 * TLS (**HTTPS/WSS**) is RECOMMENDED. Cleartext is allowed but discouraged outside of development or LAN use.
 
@@ -122,6 +122,7 @@ Servers MAY support any subset of: guest, password, OAuth. permissions are role�
 * **Access Token:** Opaque string; sent as `Authorization: Bearer <token>`.
 * **Refresh Token:** Opaque string for renewal.
 * Tokens are per device session.
+* All active sessions for the same user share the same real‑time stream scope (all joined rooms and DMs) and shared read cursors (§8). Any session may advance cursors for the user.
 
 ### 4.2 Endpoints
 
@@ -283,6 +284,7 @@ Mentions & notify:
 ### 8.1 Model
 
 * A **cursor** is the last `seq` the client has **fully processed** in a stream.
+* Cursors are per user across all of their active sessions. Any session MAY advance the cursor; servers MUST apply the highest acknowledged `seq` and reflect it to all sessions.
 * Advancing the cursor influences notification counts.
 
 ### 8.2 HTTP
@@ -300,7 +302,7 @@ Mentions & notify:
 
 ### 8.4 Resume
 
-* On WS connect, client MAY attempt resume by sending prior `session_id` and cursor map in `hello`. Server either resumes or instructs backfill via HTTP.
+* On WS connect, client MAY attempt resume by sending a cursor map in `hello`. Because the stream scope is fixed to all user streams and identical across the user’s sessions, the server resumes the same stream set without additional declarations. If resume is not possible, the server instructs backfill via HTTP.
 
 ## 9. WebSocket Real‑Time
 
@@ -332,7 +334,7 @@ Requirements:
 - Servers MAY also accept `Authorization: Bearer <token>` or an authenticated cookie on WS upgrade for native/first‑party apps.
 - Servers MUST validate the `Origin` header of WS upgrades against an allowlist; reject others.
 
-### 9.1 Handshake
+### 9.1 Handshake & Stream Scope
 
 Client → Server:
 
@@ -340,7 +342,6 @@ Client → Server:
 {
   "type": "hello",
   "client": { "name":"myclient", "version":"0.1" },
-  "subscriptions": { "rooms":["<room_name>","..."], "dms": true },
   "cursors": { "room:<room_name>":12345, "dm:<user_id>":78 },
   "want": ["presence","typing","reactions"]   // optional
 }
@@ -351,7 +352,6 @@ Server → Client:
 ```json
 {
   "type": "ready",
-  "session_id": "b32...",
   "heartbeat_ms": 30000,
   "server_time": "2025-09-08T12:35:00Z",
   "capabilities": ["uploads","search.basic","push.sse"]
@@ -359,6 +359,12 @@ Server → Client:
 ```
 
 Servers MAY send an initial `{"type":"ready"...}` immediately after connect to ease interop, but the canonical flow remains client `hello` → server `ready`.
+
+#### Real‑Time Stream Scope
+
+* Servers stream real‑time events for all streams relevant to the authenticated user: all rooms the user currently belongs to and all DMs.
+* All concurrent connections for the same user observe the same stream scope. When the user’s membership changes (join/leave/invite), servers begin or cease streaming the corresponding room events to all active sessions without requiring reconnect.
+* Backfill remains client‑driven via HTTP (§7.3, §17). Upon newly joining a room, servers may simply begin streaming new events; clients use HTTP to backfill prior history as needed.
 
 ### 9.2 Events
 
@@ -591,13 +597,13 @@ Client upgrades WebSocket using the ticket, e.g. `GET /rtm?ticket=T1` or `Sec-We
 Client sends:
 
 ```json
-{"type":"hello","client":{"name":"cli","version":"0.1"},"subscriptions":{"rooms":["r1"],"dms":true},"cursors":{}}
+{"type":"hello","client":{"name":"cli","version":"0.1"},"cursors":{}}
 ```
 
 Server:
 
 ```json
-{"type":"ready","session_id":"s1","heartbeat_ms":30000,"server_time":"...","capabilities":["uploads","search.basic","push.sse"]}
+{"type":"ready","heartbeat_ms":30000,"server_time":"...","capabilities":["uploads","search.basic","push.sse"]}
 ```
 
 4. Post

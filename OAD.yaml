@@ -478,7 +478,7 @@ components:
     # --- WebSocket message schemas (for documentation) ---
     WSHello:
       type: object
-      required: [type, client, subscriptions]
+      required: [type, client]
       properties:
         type: { type: string, const: hello }
         client:
@@ -487,25 +487,19 @@ components:
           properties:
             name: { type: string }
             version: { type: string }
-        subscriptions:
-          type: object
-          properties:
-            rooms:
-              type: array
-              items: { $ref: '#/components/schemas/Id' }
-            dms: { type: boolean }
         cursors:
           type: object
+          description: Map of stream keys to last processed seq (e.g., "room:<name>", "dm:<user_id>").
           additionalProperties: { type: integer, minimum: 0 }
         want:
           type: array
+          description: Optional feature hints (e.g., presence, typing, reactions).
           items: { type: string }
     WSReady:
       type: object
-      required: [type, session_id, heartbeat_ms, server_time]
+      required: [type, heartbeat_ms, server_time]
       properties:
         type: { type: string, const: ready }
-        session_id: { $ref: '#/components/schemas/Id' }
         heartbeat_ms: { type: integer, minimum: 1000 }
         server_time: { $ref: '#/components/schemas/Timestamp' }
         capabilities:
@@ -556,6 +550,15 @@ components:
         dm_peer_id: { $ref: '#/components/schemas/Id' }
         user_id: { $ref: '#/components/schemas/Id' }
         state: { type: string, enum: [start, stop] }
+    WSAck:
+      type: object
+      description: WebSocket cursor acknowledgement frame.
+      required: [type, cursors]
+      properties:
+        type: { type: string, const: ack }
+        cursors:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
     WSError:
       type: object
       required: [type, error]

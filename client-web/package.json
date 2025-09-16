@@ -4,14 +4,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "parcel src/index.html --open --port 4000",
+    "dev": "parcel serve src/index.html --port 4000",
     "build": "parcel build src/index.html",
-    "gen:api": "openapi-typescript ../OAD.yaml -o src/api/types.ts",
-    "check": "tsc --noEmit"
+    "gen": "openapi-typescript ../OAD.yaml -o src/types/orcp.ts"
   },
   "devDependencies": {
-    "openapi-typescript": "^6.7.4",
+    "@types/react": "^18.3.4",
+    "@types/react-dom": "^18.3.0",
+    "openapi-typescript": "^7.4.2",
     "parcel": "^2.12.0",
-    "typescript": "^5.5.4"
-  }
+    "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "browserslist": [
+    "defaults",
+    "not IE 11",
+    "maintained node versions"
+  ]
 }
+

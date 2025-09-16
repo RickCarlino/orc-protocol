@@ -1,57 +1,51 @@
-ORC Web Client (Demo)
+# ORCP Web Client (React + Parcel)
 
-This is a minimal, clean, dependency-light web client for the ORC protocol.
-It demonstrates how to consume a strict HTTP+WebSocket API using an
-OpenAPI Descriptor (OAD) to generate TypeScript types.
+- No backend here. Points to an ORCP server that implements the spec in `../SPEC.md` and `../OAD.yaml`.
+- Clean, minimal code to demonstrate building against the spec.
 
-Notes
-- No backend: this is a static Parcel app for local dev only.
-- Do not modify files outside of `client-web/` (enforced for this task).
-- Types are generated from `../OAD.yaml` using `openapi-typescript`.
+## Quick Start
 
-Quick Start
-1) Install deps and generate types
-   - `npm install`
-   - `npm run gen:api`
-2) Start dev server with hot reload
-   - `npm run dev`
-3) In the UI, set the Server URL (e.g., `http://localhost:3000` if you run a test server)
-4) Authenticate as Guest by entering a username
-5) Browse capabilities, discover rooms, join one, read and send messages
+1) Install deps
 
-Scripts
-- `npm run gen:api` — generate `src/api/types.ts` from `../OAD.yaml`
-- `npm run dev` — Parcel dev server with HMR
-- `npm run build` — production build to `dist/`
-- `npm run check` — type-check the project
+```
+cd client-web
+npm install
+```
 
-Structure
-- `src/index.html` — simple, accessible UI skeleton
-- `src/main.ts` — view logic and event wiring
-- `src/state/session.ts` — session and token storage
-- `src/api/client.ts` — tiny, explicit HTTP client using fetch
-- `src/lib/ws.ts` — minimal WebSocket RTM helper
+2) Generate types from the OpenAPI document (OAD)
 
-Design Choices
-- Strongly typed models via generated `src/api/types.ts` (from OAD)
-- Minimal runtime deps; direct `fetch` for clarity
-- Clean, small modules; no framework required
-- WS implemented with a permissive `?ticket=<access_token>` approach, matching the spec’s ticket guidance for browsers
+```
+npm run gen
+```
 
-Limitations
-- No presence/typing/reactions UI.
-- Room membership assumed by name; DM UI out of scope.
-- Minimal Markdown rendering (plain text displayed; no rich parse).
-- Messages appended in real-time only for the active room.
-- No pagination/backfill UI beyond initial 100 messages.
+3) Start the dev server (HMR) on port 4000
 
-Configuration
-- Server URL is user-provided at runtime in the UI.
-- Types are generated from the root `OAD.yaml`; regenerate after spec changes with `npm run gen:api`.
+```
+npm run dev
+```
 
-Development Notes
-- Keep changes scoped within `client-web/` only.
-- The HTTP client in `src/api/client.ts` intentionally mirrors the spec: explicit endpoints, narrow types.
-- WebSocket auth uses minted tickets per spec via `POST /rtm/ticket` and a subprotocol fallback.
-- Real-time ‘ticket’ endpoint is not modeled here; servers that accept a `ticket` query or permissive upgrade will work.
-- Rich Markdown rendering, uploads, reactions, and moderation UI are omitted for brevity.
+4) Set API Base URL in the header (defaults to `http://localhost:3000`).
+
+- This should point at a running ORCP server (implements `/auth/guest`, `/rooms`, `/directory/rooms`, message endpoints, and `/rtm` ticket + websocket).
+
+## Features (per request)
+
+- Guest login (`POST /auth/guest`).
+- Create rooms, list my rooms, list public directory.
+- Join rooms.
+- Send messages to a room, display recent messages.
+- Receive new messages over WebSocket using ticket auth (`POST /rtm/ticket` → `Sec-WebSocket-Protocol: orcp, ticket.<ticket>`).
+- Presence/typing not implemented.
+
+## Tech
+
+- React 18
+- Parcel 2 (dev server with hot reloading, port 4000)
+- openapi-typescript for typed models generated from `../OAD.yaml` (see `src/types/orcp.ts`).
+
+## Notes
+
+- API base is editable from the header for convenience.
+- The app keeps code intentionally small and readable; no global state libs.
+- The WebSocket listener appends room messages for the selected room. HTTP fetch provides initial history.
+

@@ -1,3 +1,4 @@
 client-web/node_modules/
+server-bun/node_modules/
 client-web/.parcel-cache/
 client-web/dist/

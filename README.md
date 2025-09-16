@@ -43,11 +43,12 @@ IRCs decline stemmed from a failure to evolve, and the core strengths of the pro
 
 ## Where IRC Failed
 
-* Bouncers (BNCs): These are hacks, not solutions. Casual users are not going to provision a Digital Ocean droplet so that they can get scrollback history. They are going to close their IRC client and download an app.
-* NickServ & MemoServ: Critical identity functions were bolted on as plugins.
-* History/Search: IRCv3 history is too limited. The majority of real world servers still do not implement history.
-* Mobile Support: Practically nonexistent.
-* Join/Part Messages: Confusing noise for modern users who expect persistent chat history.
+* Bouncers (BNCs): Casual users are not going to provision a Digital Ocean droplet so that they can get scrollback history. Nor are they going to pay for an IRCCloud account. They are going to close their IRC client and download a proprietary app.
+* Stateful (resumable) server-side sessions: Unlike history, this did not happen in later versions of the spec.
+* NickServ & MemoServ: Critical identity functions were added as plugins. A good protocol is useful by default.
+* History/Search: The majority of real world servers still do not implement history.
+* Mobile Support: Practically nonexistent without self-hosting.
+* Join/Part Messages: Confusing noise for modern users who expect persistent sessions.
 
 ## Why Existing Alternatives Fall Short
 
@@ -85,7 +86,7 @@ This protocol should do the same: focus on a core set of features that are usefu
 
 ### Users
 
-* Profile photo, description, mutable name, immutable ID
+* Profile photo, description, mutable display name, immutable username
 * Status line + emoji
 
 ### Core Messaging
@@ -130,12 +131,6 @@ This protocol should do the same: focus on a core set of features that are usefu
 * External integrations (Google Drive, GitHub, Jira)
 * Bots & automation (polls, reminders, workflows)
 * Peer-to-peer transfers (e.g. via wormhole/DCC-like tools)
-
-### Security
-
-* 2FA
-* OAuth support
-* Kick/ban/mute/shadowban
 
 ## Explicit Non-Goals
 

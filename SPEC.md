@@ -1,4 +1,4 @@
-For a machine readable OpenAI Descriptor, see [OAD.yml](./oad.yml)
+For a machine readable OpenAPI Descriptor, see [OAD.yaml](./OAD.yaml)
 
 # Part A — Introduction
 
@@ -18,7 +18,7 @@ The protocol is designed to be:
 * **Mobile‑friendly:** Sequence numbers, cursors, resume; no join/part spam; optional push; robust pull notifications.
 * **Admin‑friendly:** Roles/permissions and kick/ban/mute at the protocol level.
 * **Extensible but useful by default:** Strict core schemas with capability flags for optional features. Vendor extensions via `x-` fields.
-* **Security without overkill:** TLS recommended; end‑to‑end encryption out of scope. 2FA planned. OAuth planned.
+* **Security without overkill:** TLS recommended; end‑to‑end encryption out of scope.
 
 ---
 
@@ -30,7 +30,8 @@ The protocol is designed to be:
 * **Encoding:** All HTTP request/response bodies are UTF‑8 JSON unless specified.
 * **Keys:** JSON keys use `snake_case`.
 * **Time:** RFC 3339 UTC strings with `Z`.
-* **IDs:** `user_id`, `room_id`, `message_id`, `file_cid` are **server‑scoped strings**.
+* **IDs:** `room_id`, `message_id`, `file_cid` are **server‑scoped strings**.
+* **Usernames:** Public identity uses a globally‑unique `username` string. Servers MAY maintain internal user IDs, but clients MUST NOT see or depend on them.
 * **Unknowns:** Clients MUST ignore unknown keys and unknown capability names. Servers MUST ignore unknown client hint fields.
 * **Boolean flags:** Explicit `true`/`false`; absent does not equal false unless specified.
 
@@ -82,39 +83,40 @@ The protocol is designed to be:
 * Capabilities listed above are OPTIONAL unless referenced below as required. Servers MAY add vendor capabilities (prefix `x-`).
 * Clients MAY send a list of desired optional features during WS handshake; the server’s authoritative set remains this endpoint and the WS `ready` frame.
 
-## 3. Identity, IDs, and Profiles
+## 3. Identity, Usernames, and Profiles
 
 ### 3.1 ID Generation (server recommendation)
 
-* `user_id`, `room_id`, `message_id`: Unique per-resource string.
+* `room_id`, `message_id`: Unique per-resource string (server-scoped, opaque to clients).
 * `file_cid`: SHA‑256 digest of the file bytes, Base32 (no padding).
 
 ### 3.2 Users
 
-* Immutable `user_id`.
+* Immutable `username` (globally unique on the server; recommended lowercase).
+* Allowed pattern for `username`: `^[a-z0-9](?:[a-z0-9._-]{0,30}[a-z0-9])?$` (2–32 chars; starts/ends alphanumeric; allows `.`, `_`, `-`).
 * Mutable fields: `display_name` (1–128 chars), `photo_cid` (optional), `bio` (≤ 1024), `status_text` (≤ 80), `status_emoji` (Unicode emoji).
 
 **Endpoints**
 
 * `GET /users/me` → 200 `{ user }`
 * `PATCH /users/me` body `{ display_name?, bio?, status_text?, status_emoji?, photo_cid? }` → 200 `{ user }`
-* `GET /users/{user_id}` → 200 `{ user }` (public profile)
+* `GET /users/{username}` → 200 `{ user }` (public profile)
 * `GET /directory/users?q=&limit=&cursor=` → 200 `{ users:[...], next_cursor? }`
 
 ### 3.3 Presence
 
 * States: `online`, `away`, `dnd`.
 * `PATCH /users/me/presence` → body `{ state }` → 200.
-* WS event `event.presence` → `{ user_id, state }`. Ephemeral; servers SHOULD debounce.
+* WS event `event.presence` → `{ username, state }`. Ephemeral; servers SHOULD debounce.
 
 ### 3.4 Blocking
 
 * Local client block is always permitted.
-* Server‑assisted block (optional): `POST /blocks/{user_id}` / `DELETE /blocks/{user_id}`. If unsupported, return `400` `unsupported_capability`.
+* Server‑assisted block (optional): `POST /blocks/{username}` / `DELETE /blocks/{username}`. If unsupported, return `400` `unsupported_capability`.
 
 ## 4. Authentication
 
-Servers MAY support any subset of: guest, password, OAuth. permissions are role‑based (§6.2).
+Servers MAY support guest and/or password authentication. Permissions are role‑based (§6.2).
 
 ### 4.1 Tokens
 
@@ -128,20 +130,13 @@ Servers MAY support any subset of: guest, password, OAuth. permissions are role�
 Guest sessions require a username and no password:
 
 * `POST /auth/guest` body `{ username }` → 200 `{ access_token, refresh_token?, user }`
-* `POST /auth/login` body `{ username, password, otp_code? }` → 200 `{ access_token, refresh_token, user }`
+* `POST /auth/login` body `{ username, password }` → 200 `{ access_token, refresh_token, user }`
 * `POST /auth/refresh` body `{ refresh_token }` → 200 `{ access_token, refresh_token? }`
 * `POST /auth/logout` → 204 (revokes current device)
 * `GET /auth/sessions` → 200 `{ sessions:[{ session_id, device, created_at, last_seen_at }] }`
 * `DELETE /auth/sessions/{session_id}` → 204
 
-### 4.3 OAuth (WIP, `auth.oauth`)
-
-* `POST /auth/oauth/start` → 200 `{ redirect_url }`
-* `POST /auth/oauth/callback` body `{ code, state }` → 200 `{ access_token, refresh_token, user }`
-
-### 4.4 2FA (optional)
-
-* If 2FA required, `/auth/login` MAY return `401` with error `otp_required` OR `200 { requires_otp:true }`. Client then retries with `otp_code`.
+ 
 
 ## 5. Rooms
 
@@ -155,7 +150,7 @@ Room object:
   "name": "general",
   "topic": "Welcome",
   "visibility": "public",         // "public" or "private"
-  "owner_id": "b32...",
+  "owner": "alice",               // owner username
   "created_at": "2025-09-08T12:00:00Z",
   "counts": { "members": 42 },
   "pinned_message_ids": ["b32...", "b32..."]
@@ -178,8 +173,8 @@ Name rules
 * `POST /rooms` body `{ name, visibility, topic? }` → 201 `{ room }`
 * `GET /rooms/{room_name}` → 200 `{ room }`
 * `PATCH /rooms/{room_name}` body `{ name?, topic?, visibility? }` (owner/admin) → 200 `{ room }`
-* `GET /rooms/{room_name}/members?limit=&cursor=` → 200 `{ members:[{user_id, role}], next_cursor? }`
-* `POST /rooms/{room_name}/invite` body `{ user_id }` → 204
+* `GET /rooms/{room_name}/members?limit=&cursor=` → 200 `{ members:[{username, role}], next_cursor? }`
+* `POST /rooms/{room_name}/invite` body `{ username }` → 204
 * `POST /rooms/{room_name}/join` → 204
 * `POST /rooms/{room_name}/leave` → 204
 * `POST /rooms/{room_name}/pins` body `{ message_id }` → 204
@@ -198,22 +193,22 @@ Baseline roles (server MAY extend but MUST map to these minimums):
 Endpoints:
 
 * `GET /rooms/{room_name}/roles` → 200 `{ roles:[{name, permissions:[...]}] }`
-* `POST /rooms/{room_name}/roles/assign` body `{ user_id, role }` → 204
+* `POST /rooms/{room_name}/roles/assign` body `{ username, role }` → 204
 
 ## 6. Direct Messages (DM)
 
 * DMs are **pairwise**. Group chats use (possibly private) rooms.
-* A DM stream is identified by **peer user\_id** from the caller’s perspective.
+* A DM stream is identified by **peer `username`** from the caller’s perspective.
 * The server MUST create the DM stream implicitly when the first message is sent.
 
 **Endpoints**
 
-* `GET /dms?limit=&cursor=` → 200 `{ peers:[{ user_id, last_ts, last_seq }], next_cursor? }`
-* `GET /dms/{user_id}/messages?from_seq=&limit=` → 200 `{ messages:[...], next_seq }`
-* `GET /dms/{user_id}/messages/backfill?before_seq=&limit=` → 200 `{ messages:[...], prev_seq }`
-* `POST /dms/{user_id}/messages` body `{ text, content_type?, attachments? }` → 201 `{ message }`
-* `POST /dms/{user_id}/ack` body `{ seq }` → 204
-* `GET /dms/{user_id}/cursor` → 200 `{ seq }`
+* `GET /dms?limit=&cursor=` → 200 `{ peers:[{ username, last_ts, last_seq }], next_cursor? }`
+* `GET /dms/{username}/messages?from_seq=&limit=` → 200 `{ messages:[...], next_seq }`
+* `GET /dms/{username}/messages/backfill?before_seq=&limit=` → 200 `{ messages:[...], prev_seq }`
+* `POST /dms/{username}/messages` body `{ text, content_type?, attachments? }` → 201 `{ message }`
+* `POST /dms/{username}/ack` body `{ seq }` → 204
+* `GET /dms/{username}/cursor` → 200 `{ seq }`
 
 ## 7. Messages
 
@@ -221,7 +216,7 @@ Endpoints:
 
 * Each stream (room or DM) has a **monotonic uint64 `seq`** assigned by the server.
 * `ts` MUST be non‑decreasing with `seq`.
-* `(room_id, message_id)` or `(dm_peer_id, message_id)` uniquely identifies a message.
+* `(room_id, message_id)` or `(dm_peer, message_id)` uniquely identifies a message.
 
 ### 7.2 Schema
 
@@ -229,15 +224,15 @@ Endpoints:
 {
   "message_id": "b32...",
   "room_id": "b32...",          // present for rooms; null for DMs
-  "dm_peer_id": null,           // present for DMs; null for rooms
-  "author_id": "b32...",
+  "dm_peer": null,              // present for DMs; null for rooms; value is peer username
+  "author": "alice",           // author username
   "seq": 12345,
   "ts": "2025-09-08T12:34:56Z",
   "parent_id": null,            // for threads; message_id only
   "content_type": "text/markdown",
   "text": "hello **world**",
   "entities": {
-    "mentions": [ { "user_id":"b32...", "range":[6,11] } ],
+    "mentions": [ { "username":"bob", "range":[6,11] } ],
     "links":    [ { "url":"https://example", "range":[0,5] } ]
   },
   "attachments": [
@@ -271,7 +266,7 @@ Reactions:
 
 Mentions & notify:
 
-* Servers SHOULD parse mentions by handle or by `entities.mentions` and generate notifications per user preferences.
+* Servers SHOULD parse mentions by handle (username) or by `entities.mentions` and generate notifications per user preferences.
 
 ### 7.4 Pins
 
@@ -289,14 +284,14 @@ Mentions & notify:
 ### 8.2 HTTP
 
 * Rooms: `POST /rooms/{room_name}/ack` `{ seq }` → 204; `GET /rooms/{room_name}/cursor` → 200 `{ seq }`
-* DMs: `POST /dms/{user_id}/ack` `{ seq }` → 204; `GET /dms/{user_id}/cursor` → 200 `{ seq }`
+* DMs: `POST /dms/{username}/ack` `{ seq }` → 204; `GET /dms/{username}/cursor` → 200 `{ seq }`
 
 ### 8.3 WebSocket Ack
 
 * Client MAY batch acks:
 
 ```json
-{ "type":"ack", "cursors": { "room:<room_name>":12345, "dm:<user_id>":678 } }
+{ "type":"ack", "cursors": { "room:<room_name>":12345, "dm:<username>":678 } }
 ```
 
 ### 8.4 Resume
@@ -312,7 +307,7 @@ Mentions & notify:
 
 To keep browser and native clients simple and consistent, WebSocket connections authenticate via short‑lived tickets.
 
-1) Obtain a ticket over HTTP using your normal auth (guest/password/OAuth):
+1) Obtain a ticket over HTTP using your normal auth (guest/password):
 
 `POST /rtm/ticket`  with `Authorization: Bearer <access_token>`
 
@@ -352,7 +347,7 @@ Client → Server:
 {
   "type": "hello",
   "client": { "name":"myclient", "version":"0.1" },
-  "cursors": { "room:<room_name>":12345, "dm:<user_id>":78 },
+  "cursors": { "room:<room_name>":12345, "dm:<username>":78 },
   "want": ["presence","typing","reactions"]   // optional
 }
 ```
@@ -380,13 +375,13 @@ Servers MAY send an initial `{"type":"ready"...}` immediately after connect to e
 
 * `event.message.create` → `{ message }`
 * `event.message.edit` → `{ message }`
-* `event.message.delete` → `{ message_id, room_id?, dm_peer_id?, ts }`
+* `event.message.delete` → `{ message_id, room_id?, dm_peer?, ts }`
 * `event.reaction.add` → `{ message_id, emoji, counts:[{emoji,count}] }`
 * `event.reaction.remove` → same shape
-* `event.typing` → `{ room_id|dm_peer_id, user_id, state:"start"|"stop" }`
-* `event.presence` → `{ user_id, state }`
+* `event.typing` → `{ room_id|dm_peer, username, state:"start"|"stop" }`
+* `event.presence` → `{ username, state }`
 * `event.pin.add` / `event.pin.remove` → `{ room_id, message_id }`
-* `event.moderation.kick|ban|unban|mute|unmute` → `{ scope:"room"|"server", room_id?, user_id, by, reason?, until? }`
+* `event.moderation.kick|ban|unban|mute|unmute` → `{ scope:"room"|"server", room_id?, username, by, reason?, until? }`
 
 ### 9.3 Heartbeats
 
@@ -396,7 +391,7 @@ Servers MAY send an initial `{"type":"ready"...}` immediately after connect to e
 
 **Endpoint:** `GET /search/messages`
 
-* Query parameters: `q` (required), `room_name?`, `dm_peer_id?`, `before_ts?`, `after_ts?`, `limit?`, `cursor?`
+* Query parameters: `q` (required), `room_name?`, `dm_peer?`, `before_ts?`, `after_ts?`, `limit?`, `cursor?`
 * **Baseline requirement:** substring match over `text` (case‑insensitive).
 
 **Response 200**
@@ -460,7 +455,7 @@ Servers MAY send an initial `{"type":"ready"...}` immediately after connect to e
   {
     "room_overrides": { "<room_id>": { "mute": true } },
     "thread_mutes": ["<message_id>"],
-    "user_mutes": ["<user_id>"]
+    "user_mutes": ["<username>"]
   }
   ```
 
@@ -468,13 +463,13 @@ Servers MAY send an initial `{"type":"ready"...}` immediately after connect to e
 
 ### 14.1 User Actions
 
-* **Kick (room):** `POST /rooms/{room_name}/kick` body `{ user_id, reason? }` → 204
-* **Ban (room):** `POST /rooms/{room_name}/bans` body `{ user_id, reason?, duration_sec? }` → 204
-* **Unban (room):** `DELETE /rooms/{room_name}/bans/{user_id}` → 204
-* **Mute (room):** `POST /rooms/{room_name}/mutes` body `{ user_id, duration_sec? }` → 204
-* **Unmute (room):** `DELETE /rooms/{room_name}/mutes/{user_id}` → 204
-* **Ban (server):** `POST /bans` body `{ user_id, reason?, duration_sec? }` → 204
-* **Unban (server):** `DELETE /bans/{user_id}` → 204
+* **Kick (room):** `POST /rooms/{room_name}/kick` body `{ username, reason? }` → 204
+* **Ban (room):** `POST /rooms/{room_name}/bans` body `{ username, reason?, duration_sec? }` → 204
+* **Unban (room):** `DELETE /rooms/{room_name}/bans/{username}` → 204
+* **Mute (room):** `POST /rooms/{room_name}/mutes` body `{ username, duration_sec? }` → 204
+* **Unmute (room):** `DELETE /rooms/{room_name}/mutes/{username}` → 204
+* **Ban (server):** `POST /bans` body `{ username, reason?, duration_sec? }` → 204
+* **Unban (server):** `DELETE /bans/{username}` → 204
 
 ### 14.2 Message Actions
 
@@ -496,7 +491,7 @@ Servers MAY send an initial `{"type":"ready"...}` immediately after connect to e
 
 * Servers MUST retain messages for a configured period (unbounded allowed).
 * For pruned ranges, HTTP reads MUST return **410 Gone** with `error.code = "history_pruned"`.
-* Minimal search: case‑insensitive substring on `text` across the addressed stream unless `room_id`/`dm_peer_id` filters are provided.
+* Minimal search: case‑insensitive substring on `text` across the addressed stream unless `room_id`/`dm_peer` filters are provided.
 
 ## 17. Pagination
 
@@ -510,7 +505,7 @@ Servers MAY send an initial `{"type":"ready"...}` immediately after connect to e
 
 * 200 OK, 201 Created, 204 No Content on success as specified per endpoint.
 * 400 Bad Request (malformed/invalid fields; unsupported capability → see code)
-* 401 Unauthorized (missing/invalid token; or `otp_required`)
+* 401 Unauthorized (missing/invalid token)
 * 403 Forbidden (permission denied)
 * 404 Not Found (resource missing)
 * 409 Conflict (edit/delete conflict)
@@ -578,7 +573,7 @@ WS error frame:
 POST /auth/guest
 {"username":"guest1"}
 → 200
-{"access_token":"tA","user":{"user_id":"u1","display_name":"Guest"}}
+{"access_token":"tA","user":{"username":"guest1","display_name":"Guest"}}
 ```
 
 2. Create public room
@@ -587,7 +582,7 @@ POST /auth/guest
 POST /rooms
 Authorization: Bearer tA
 {"name":"general","visibility":"public"}
-→ 201 {"room_id":"r1","name":"general","visibility":"public","owner_id":"u1","created_at":"...","counts":{"members":1},"pinned_message_ids":[]}
+→ 201 {"room_id":"r1","name":"general","visibility":"public","owner":"guest1","created_at":"...","counts":{"members":1},"pinned_message_ids":[]}
 ```
 
 3. WS connect (ticket‑based)
@@ -618,13 +613,13 @@ Server:
 POST /rooms/general/messages
 Authorization: Bearer tA
 {"text":"hello **world**"}
-→ 201 {"message_id":"m1","room_id":"r1","author_id":"u1","seq":1,"ts":"...","text":"hello **world**","content_type":"text/markdown","tombstone":false}
+→ 201 {"message_id":"m1","room_id":"r1","author":"guest1","seq":1,"ts":"...","text":"hello **world**","content_type":"text/markdown","tombstone":false}
 ```
 
 WS:
 
 ```json
-{"type":"event.message.create","message":{"message_id":"m1","room_id":"r1","author_id":"u1","seq":1,"ts":"...","text":"hello **world**","content_type":"text/markdown","tombstone":false}}
+{"type":"event.message.create","message":{"message_id":"m1","room_id":"r1","author":"guest1","seq":1,"ts":"...","text":"hello **world**","content_type":"text/markdown","tombstone":false}}
 ```
 
 5. React

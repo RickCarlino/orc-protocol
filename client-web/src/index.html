@@ -3,95 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ORC Web Client</title>
+    <title>ORCP Web</title>
     <style>
-      :root { color-scheme: light dark; --bg:#111; --fg:#eaeaea; --muted:#888; --accent:#4f8cff; }
-      html, body { margin:0; height:100%; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji"; }
-      body { display:flex; background:var(--bg); color:var(--fg); }
-      .sidebar { width:280px; border-right:1px solid #222; padding:12px; box-sizing:border-box; }
-      .content { flex:1; display:flex; flex-direction:column; height:100vh; }
-      .toolbar { padding:8px 12px; border-bottom:1px solid #222; display:flex; gap:8px; align-items:center; }
-      .messages { flex:1; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
-      .msg { padding:8px 10px; border:1px solid #222; border-radius:8px; background:#0d0d0d; }
-      .msg .meta { color:var(--muted); font-size:12px; margin-bottom:4px; }
-      .composer { display:flex; gap:8px; border-top:1px solid #222; padding:8px; }
-      input, button, select, textarea { background:#111; color:var(--fg); border:1px solid #333; border-radius:6px; padding:8px; }
-      button { cursor:pointer; background:#161616; }
-      .room { padding:6px 8px; border-radius:6px; cursor:pointer; }
-      .room.active { background:#1a1a1a; }
-      .muted { color:var(--muted); }
-      .section { margin-top:12px; }
-      .row { display:flex; gap:8px; align-items:center; }
-      .grow { flex:1; }
-      .small { font-size:12px; }
-      .caps { text-transform: uppercase; letter-spacing: .04em; font-size:11px; color:var(--muted); }
-      .pill { font-size:11px; padding:2px 6px; border:1px solid #333; border-radius:999px; }
-      a { color: var(--accent); text-decoration: none; }
+      :root { color-scheme: light dark; }
+      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji'; }
+      #root { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
     </style>
   </head>
   <body>
-    <div class="sidebar">
-      <div class="section">
-        <div class="caps">Server</div>
-        <div class="row">
-          <input id="serverUrl" class="grow" placeholder="https://api.example.com" />
-        </div>
-        <div class="row" style="margin-top:6px;">
-          <input id="username" class="grow" placeholder="guest username" />
-          <button id="guestLogin">Guest Login</button>
-        </div>
-        <div id="authState" class="small muted" style="margin-top:6px;"></div>
-      </div>
-
-      <div class="section">
-        <div class="caps">Capabilities</div>
-        <div id="caps" class="small muted">—</div>
-      </div>
-
-      <div class="section">
-        <div class="caps">My Rooms</div>
-        <div id="myRooms"></div>
-      </div>
-
-      <div class="section">
-        <div class="caps">Discover</div>
-        <div class="row" style="margin-bottom:6px;">
-          <input id="discoverQ" class="grow" placeholder="Search rooms" />
-          <button id="discoverBtn">Search</button>
-        </div>
-        <div id="discoverRooms"></div>
-      </div>
-
-      <div class="section">
-        <div class="caps">Create Room</div>
-        <div class="row" style="margin-bottom:6px;">
-          <input id="createRoomName" class="grow" placeholder="room name" />
-        </div>
-        <div class="row" style="margin-bottom:6px;">
-          <select id="createRoomVisibility">
-            <option value="public">public</option>
-            <option value="private">private</option>
-          </select>
-          <input id="createRoomTopic" class="grow" placeholder="optional topic" />
-        </div>
-        <div class="row">
-          <button id="createRoomBtn">Create</button>
-        </div>
-        <div id="createRoomMsg" class="small muted" style="margin-top:6px;"></div>
-      </div>
-    </div>
-    <div class="content">
-      <div class="toolbar">
-        <div id="roomTitle" class="grow">No room selected</div>
-        <span class="pill small" id="wsState">WS: —</span>
-      </div>
-      <div id="messages" class="messages"></div>
-      <div class="composer">
-        <textarea id="composerInput" class="grow" rows="2" placeholder="Write a message... (Markdown subset)"></textarea>
-        <button id="sendBtn">Send</button>
-      </div>
-    </div>
-
-    <script type="module" src="./main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
   </body>
   </html>
+

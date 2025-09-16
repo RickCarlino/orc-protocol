@@ -67,11 +67,13 @@ components:
       required: true
       description: Globally unique room name (case-insensitive uniqueness). Servers MAY canonicalize.
       schema: { type: string, minLength: 1, maxLength: 80 }
-    UserId:
-      name: user_id
+    Username:
+      name: username
       in: path
       required: true
-      schema: { $ref: '#/components/schemas/Id' }
+      description: Globally-unique username (2-32 chars, lowercase a-z, 0-9, . _ -)
+      schema:
+        $ref: '#/components/schemas/Username'
     MessageId:
       name: message_id
       in: path
@@ -101,6 +103,12 @@ components:
     NoContent:
       description: No Content
   schemas:
+    Username:
+      type: string
+      description: Globally-unique public username.
+      minLength: 2
+      maxLength: 32
+      pattern: '^[a-z0-9](?:[a-z0-9._-]{0,30}[a-z0-9])?$'
     Id:
       type: string
       description: rfc4648 Base32 (no padding), server-scoped.
@@ -111,9 +119,9 @@ components:
       description: RFC 3339 UTC with Z
     User:
       type: object
-      required: [user_id, display_name]
+      required: [username, display_name]
       properties:
-        user_id: { $ref: '#/components/schemas/Id' }
+        username: { $ref: '#/components/schemas/Username' }
         display_name: { type: string, minLength: 1, maxLength: 128 }
         photo_cid: { $ref: '#/components/schemas/Id' }
         bio: { type: string, maxLength: 1024 }
@@ -130,13 +138,13 @@ components:
         state: { $ref: '#/components/schemas/PresenceState' }
     Room:
       type: object
-      required: [room_id, name, visibility, owner_id, created_at]
+      required: [room_id, name, visibility, owner, created_at]
       properties:
         room_id: { $ref: '#/components/schemas/Id' }
         name: { type: string, minLength: 1, maxLength: 80 }
         topic: { type: string, maxLength: 512 }
         visibility: { type: string, enum: [public, private] }
-        owner_id: { $ref: '#/components/schemas/Id' }
+        owner: { $ref: '#/components/schemas/Username' }
         created_at: { $ref: '#/components/schemas/Timestamp' }
         counts:
           type: object
@@ -149,9 +157,9 @@ components:
       additionalProperties: true
     RoomMember:
       type: object
-      required: [user_id, role]
+      required: [username, role]
       properties:
-        user_id: { $ref: '#/components/schemas/Id' }
+        username: { $ref: '#/components/schemas/Username' }
         role:
           type: string
           enum: [owner, admin, moderator, member, guest]
@@ -198,12 +206,12 @@ components:
         me: { type: boolean }
     Message:
       type: object
-      required: [message_id, author_id, seq, ts]
+      required: [message_id, author, seq, ts]
       properties:
         message_id: { $ref: '#/components/schemas/Id' }
         room_id: { anyOf: [ { $ref: '#/components/schemas/Id' }, { type: 'null' } ] }
-        dm_peer_id: { anyOf: [ { $ref: '#/components/schemas/Id' }, { type: 'null' } ] }
-        author_id: { $ref: '#/components/schemas/Id' }
+        dm_peer: { anyOf: [ { type: 'string' }, { type: 'null' } ] }
+        author: { $ref: '#/components/schemas/Username' }
         seq: { type: integer, minimum: 0 }
         ts: { $ref: '#/components/schemas/Timestamp' }
         parent_id: { anyOf: [ { $ref: '#/components/schemas/Id' }, { type: 'null' } ] }
@@ -216,9 +224,9 @@ components:
               type: array
               items:
                 type: object
-                required: [user_id, range]
+                required: [username, range]
                 properties:
-                  user_id: { $ref: '#/components/schemas/Id' }
+                  username: { $ref: '#/components/schemas/Username' }
                   range:
                     type: array
                     items: { type: integer, minimum: 0 }
@@ -291,33 +299,33 @@ components:
       minProperties: 1
     InviteRequest:
       type: object
-      required: [user_id]
+      required: [username]
       properties:
-        user_id: { $ref: '#/components/schemas/Id' }
+        username: { $ref: '#/components/schemas/Username' }
     RoleAssignRequest:
       type: object
-      required: [user_id, role]
+      required: [username, role]
       properties:
-        user_id: { $ref: '#/components/schemas/Id' }
+        username: { $ref: '#/components/schemas/Username' }
         role: { type: string, enum: [owner, admin, moderator, member, guest] }
     BanRequest:
       type: object
-      required: [user_id]
+      required: [username]
       properties:
-        user_id: { $ref: '#/components/schemas/Id' }
+        username: { $ref: '#/components/schemas/Username' }
         reason: { type: string }
         duration_sec: { type: integer, minimum: 1 }
     MuteRequest:
       type: object
-      required: [user_id]
+      required: [username]
       properties:
-        user_id: { $ref: '#/components/schemas/Id' }
+        username: { $ref: '#/components/schemas/Username' }
         duration_sec: { type: integer, minimum: 1 }
     ReportRequest:
       type: object
       properties:
         message_id: { $ref: '#/components/schemas/Id' }
-        user_id: { $ref: '#/components/schemas/Id' }
+        username: { $ref: '#/components/schemas/Username' }
         reason: { type: string }
         notes: { type: string }
       minProperties: 1
@@ -358,7 +366,7 @@ components:
           items: { $ref: '#/components/schemas/Id' }
         user_mutes:
           type: array
-          items: { $ref: '#/components/schemas/Id' }
+          items: { $ref: '#/components/schemas/Username' }
     PrefsPatch:
       type: object
       properties:
@@ -419,32 +427,14 @@ components:
                 - conflict
                 - history_pruned
                 - internal
-                - otp_required
             message: { type: string }
             details: { type: object }
-    OAuthStartRequest:
-      type: object
-      required: [provider]
-      properties:
-        provider: { type: string }
-    OAuthStartResponse:
-      type: object
-      required: [redirect_url]
-      properties:
-        redirect_url: { type: string, format: uri }
-    OAuthCallbackRequest:
-      type: object
-      required: [code, state]
-      properties:
-        code: { type: string }
-        state: { type: string }
     LoginRequest:
       type: object
       required: [username, password]
       properties:
         username: { type: string }
         password: { type: string }
-        otp_code: { type: string }
     GuestRequest:
       type: object
       required: [username]
@@ -499,7 +489,7 @@ components:
             version: { type: string }
         cursors:
           type: object
-          description: Map of stream keys to last processed seq (e.g., "room:<name>", "dm:<user_id>").
+          description: Map of stream keys to last processed seq (e.g., "room:<name>", "dm:<username>").
           additionalProperties: { type: integer, minimum: 0 }
         want:
           type: array
@@ -534,7 +524,7 @@ components:
         type: { type: string, const: event.message.delete }
         message_id: { $ref: '#/components/schemas/Id' }
         room_id: { $ref: '#/components/schemas/Id' }
-        dm_peer_id: { $ref: '#/components/schemas/Id' }
+        dm_peer: { type: string }
         ts: { $ref: '#/components/schemas/Timestamp' }
     WSEventReactionAdd:
       type: object
@@ -553,12 +543,12 @@ components:
               count: { type: integer, minimum: 0 }
     WSEventTyping:
       type: object
-      required: [type, user_id, state]
+      required: [type, username, state]
       properties:
         type: { type: string, const: event.typing }
         room_id: { $ref: '#/components/schemas/Id' }
-        dm_peer_id: { $ref: '#/components/schemas/Id' }
-        user_id: { $ref: '#/components/schemas/Id' }
+        dm_peer: { type: string }
+        username: { $ref: '#/components/schemas/Username' }
         state: { type: string, enum: [start, stop] }
     WSAck:
       type: object
@@ -681,39 +671,7 @@ paths:
         '401': { $ref: '#/components/responses/ErrorResponse' }
         '404': { $ref: '#/components/responses/ErrorResponse' }
 
-  /auth/oauth/start:
-    post:
-      tags: [Auth]
-      summary: Start OAuth flow (optional feature)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OAuthStartRequest' }
-      responses:
-        '200':
-          description: Redirect URL
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OAuthStartResponse' }
-        '400': { $ref: '#/components/responses/ErrorResponse' }
-
-  /auth/oauth/callback:
-    post:
-      tags: [Auth]
-      summary: Complete OAuth flow (optional feature)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OAuthCallbackRequest' }
-      responses:
-        '200':
-          description: Tokens and user
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/LoginResponse' }
-        '400': { $ref: '#/components/responses/ErrorResponse' }
+  
 
   /users/me:
     get:
@@ -766,12 +724,12 @@ paths:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/ErrorResponse' }
 
-  /users/{user_id}:
+  /users/{username}:
     get:
       tags: [Users]
       summary: Get a user's public profile
       security: [{ BearerAuth: [] }, {}]
-      parameters: [ { $ref: '#/components/parameters/UserId' } ]
+      parameters: [ { $ref: '#/components/parameters/Username' } ]
       responses:
         '200':
           description: User
@@ -780,12 +738,12 @@ paths:
               schema: { $ref: '#/components/schemas/User' }
         '404': { $ref: '#/components/responses/ErrorResponse' }
 
-  /blocks/{user_id}:
+  /blocks/{username}:
     post:
       tags: [Users]
       summary: Server-assisted block (optional)
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/UserId' } ]
+      parameters: [ { $ref: '#/components/parameters/Username' } ]
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '400': { $ref: '#/components/responses/ErrorResponse' }
@@ -794,7 +752,7 @@ paths:
       tags: [Users]
       summary: Remove server-assisted block (optional)
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/UserId' } ]
+      parameters: [ { $ref: '#/components/parameters/Username' } ]
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
         '401': { $ref: '#/components/responses/ErrorResponse' }
@@ -1160,20 +1118,20 @@ paths:
                     type: array
                     items:
                       type: object
-                      required: [user_id]
+                      required: [username]
                       properties:
-                        user_id: { $ref: '#/components/schemas/Id' }
+                        username: { $ref: '#/components/schemas/Username' }
                         last_ts: { $ref: '#/components/schemas/Timestamp' }
                         last_seq: { type: integer, minimum: 0 }
                   next_cursor: { type: string }
 
-  /dms/{user_id}/messages:
+  /dms/{username}/messages:
     get:
       tags: [DMs]
       summary: Read forward DM history
       security: [{ BearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/Username'
         - $ref: '#/components/parameters/FromSeq'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1192,7 +1150,7 @@ paths:
       tags: [DMs]
       summary: Send a direct message
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/UserId' } ]
+      parameters: [ { $ref: '#/components/parameters/Username' } ]
       requestBody:
         required: true
         content:
@@ -1205,13 +1163,13 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Message' }
 
-  /dms/{user_id}/messages/backfill:
+  /dms/{username}/messages/backfill:
     get:
       tags: [DMs]
       summary: Backfill DM history (reverse)
       security: [{ BearerAuth: [] }]
       parameters:
-        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/Username'
         - $ref: '#/components/parameters/BeforeSeq'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1227,12 +1185,12 @@ paths:
                     items: { $ref: '#/components/schemas/Message' }
                   prev_seq: { type: integer, minimum: 0 }
 
-  /dms/{user_id}/ack:
+  /dms/{username}/ack:
     post:
       tags: [DMs]
       summary: Advance the DM cursor
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/UserId' } ]
+      parameters: [ { $ref: '#/components/parameters/Username' } ]
       requestBody:
         required: true
         content:
@@ -1241,12 +1199,12 @@ paths:
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
 
-  /dms/{user_id}/cursor:
+  /dms/{username}/cursor:
     get:
       tags: [DMs]
       summary: Read the DM cursor
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/UserId' } ]
+      parameters: [ { $ref: '#/components/parameters/Username' } ]
       responses:
         '200':
           description: Cursor
@@ -1374,10 +1332,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
-        - name: dm_peer_id
+        - name: dm_peer
           in: query
           required: false
-          schema: { $ref: '#/components/schemas/Id' }
+          schema: { type: string }
         - name: before_ts
           in: query
           schema: { $ref: '#/components/schemas/Timestamp' }
@@ -1563,9 +1521,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [user_id]
+              required: [username]
               properties:
-                user_id: { $ref: '#/components/schemas/Id' }
+                username: { $ref: '#/components/schemas/Username' }
                 reason: { type: string }
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
@@ -1584,14 +1542,14 @@ paths:
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
 
-  /rooms/{room_name}/bans/{user_id}:
+  /rooms/{room_name}/bans/{username}:
     delete:
       tags: [Moderation]
       summary: Unban a user in a room
       security: [{ BearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/RoomName'
-        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/Username'
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
 
@@ -1609,14 +1567,14 @@ paths:
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
 
-  /rooms/{room_name}/mutes/{user_id}:
+  /rooms/{room_name}/mutes/{username}:
     delete:
       tags: [Moderation]
       summary: Unmute a user in a room
       security: [{ BearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/RoomName'
-        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/Username'
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
 
@@ -1633,12 +1591,12 @@ paths:
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
 
-  /bans/{user_id}:
+  /bans/{username}:
     delete:
       tags: [Moderation]
       summary: Remove server-wide ban
       security: [{ BearerAuth: [] }]
-      parameters: [ { $ref: '#/components/parameters/UserId' } ]
+      parameters: [ { $ref: '#/components/parameters/Username' } ]
       responses:
         '204': { $ref: '#/components/responses/NoContent' }
 

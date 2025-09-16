@@ -32,6 +32,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: bearer
+    TicketQuery:
+      type: apiKey
+      in: query
+      name: ticket
   parameters:
     Limit:
       name: limit
@@ -326,6 +330,12 @@ components:
         bytes: { type: integer, minimum: 0 }
         mime: { type: string }
         sha256: { type: string }
+    TicketResponse:
+      type: object
+      required: [ticket, expires_in_ms]
+      properties:
+        ticket: { type: string }
+        expires_in_ms: { type: integer, minimum: 1 }
     Preview:
       type: object
       required: [url]
@@ -1461,19 +1471,6 @@ paths:
               schema: { $ref: '#/components/schemas/Preview' }
         '400': { $ref: '#/components/responses/ErrorResponse' }
 
-  /notifications/stream:
-    get:
-      tags: [Notifications]
-      summary: Server-Sent Events stream for mentions, DMs, invites
-      security: [{ BearerAuth: [] }]
-      responses:
-        '200':
-          description: SSE stream (text/event-stream with JSON payload per event)
-          content:
-            text/event-stream:
-              schema: { type: string, description: "SSE event stream" }
-        '401': { $ref: '#/components/responses/ErrorResponse' }
-
   /notifications/poll:
     get:
       tags: [Notifications]
@@ -1708,8 +1705,31 @@ paths:
         Perform an HTTP GET that upgrades to WebSocket (WSS strongly recommended).
         After upgrade, client sends a `WSHello` frame and receives a `WSReady`
         frame, then event frames as defined under components/schemas.
-      security: [{ BearerAuth: [] }]
+        Authentication is tickets-only: present the ticket via WebSocket subprotocol
+        (recommended: `Sec-WebSocket-Protocol: orcp, ticket.<ticket>`) or as a
+        query parameter `?ticket=<ticket>`.
+      parameters:
+        - name: ticket
+          in: query
+          required: false
+          description: Ticket obtained from POST /rtm/ticket. Optional when using WS subprotocol.
+          schema: { type: string }
+      security: []
       responses:
         '101':
           description: Switching Protocols (WebSocket Upgrade)
+        '401': { $ref: '#/components/responses/ErrorResponse' }
+
+  /rtm/ticket:
+    post:
+      tags: [Realtime]
+      summary: Mint a short-lived ticket for WebSocket authentication
+      description: Requires standard HTTP auth. The returned ticket is single-use and short-lived.
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Ticket minted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TicketResponse' }
         '401': { $ref: '#/components/responses/ErrorResponse' }

@@ -158,7 +158,7 @@ This protocol should do the same: focus on a core set of features that are usefu
 ### Architecture
 
 * Slow resources - HTTP/REST
-* Fast events - WebSockets/TCP
+* Fast events - WebSockets
 * Capability system for partial implementations
 
 ### Technologies to Favor
@@ -167,7 +167,6 @@ This protocol should do the same: focus on a core set of features that are usefu
 * JSON + JSON Schema
 * Base32
 * WebSockets
-* TCP
 * Content-addressed media (e.g. emojis, uploads)
 * OpenAPI descriptors
 

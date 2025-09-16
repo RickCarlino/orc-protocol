@@ -1,0 +1,13 @@
+{
+  "name": "orcp-server-bun",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts",
+    "gen:types": "node ../client-web/node_modules/openapi-typescript/bin/cli.js ../OAD.yaml -o src/api/types.ts",
+    "check": "bun x tsc --noEmit"
+  }
+}
+

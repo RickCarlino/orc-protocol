@@ -38,7 +38,7 @@ The protocol is designed to be:
 
 * **HTTP(S)** for resource CRUD (auth, users, rooms, search, uploads, notifications registration).
 * **WebSocket (WS/WSS)** for real‑time events and cursor acks for all streams relevant to the user (all joined rooms and DMs).
-  * Authentication uses short‑lived tickets minted via `POST /rtm/ticket` (see §9.0).
+  * Authentication uses short‑lived tickets minted via `POST /rtm/ticket` (see §9.0). Access tokens or cookies MUST NOT be accepted for WS authentication.
 * TLS (**HTTPS/WSS**) is RECOMMENDED. Cleartext is allowed but discouraged outside of development or LAN use.
 
 ## 2. Capabilities & Limits
@@ -58,7 +58,6 @@ The protocol is designed to be:
     "search.basic",
     "search.regex",
     "previews",
-    "push.sse",
     "push.poll",
     "push.apns",
     "push.fcm",
@@ -315,7 +314,7 @@ To keep browser and native clients simple and consistent, WebSocket connections 
 
 1) Obtain a ticket over HTTP using your normal auth (guest/password/OAuth):
 
-`POST /rtm/ticket`  with `Authorization: Bearer <access_token>` (or server‑accepted cookie)
+`POST /rtm/ticket`  with `Authorization: Bearer <access_token>`
 
 Response 200:
 
@@ -331,8 +330,19 @@ Response 200:
 Requirements:
 
 - Tickets MUST be single‑use and short‑lived (RECOMMENDED ≤ 60 s).
-- Servers MAY also accept `Authorization: Bearer <token>` or an authenticated cookie on WS upgrade for native/first‑party apps.
+- Servers MUST NOT accept `Authorization: Bearer <token>` or cookies on WebSocket upgrade. Only tickets are valid for WS authentication.
 - Servers MUST validate the `Origin` header of WS upgrades against an allowlist; reject others.
+
+Important:
+
+- A ticket is not the same thing as an auth token.
+
+Separation of credentials:
+
+- Tickets are single‑use, short‑lived credentials minted via `POST /rtm/ticket`, scoped only to establishing a WebSocket session. They cannot be used for HTTP calls and are not refreshable.
+- Access tokens authorize HTTP calls and device sessions. They are not interchangeable with tickets and MUST NOT be sent over the WS upgrade in place of a ticket.
+- The RECOMMENDED flow is: obtain a ticket via `POST /rtm/ticket`, then present it as a subprotocol (`Sec-WebSocket-Protocol: orcp, ticket.<ticket>`) or as a query parameter (`/rtm?ticket=<ticket>`).
+- Tickets MUST be single‑use and short‑lived (RECOMMENDED ≤ 60 s). Servers MUST validate `Origin`, and MUST reject WS upgrades that do not present a valid ticket.
 
 ### 9.1 Handshake & Stream Scope
 
@@ -354,7 +364,7 @@ Server → Client:
   "type": "ready",
   "heartbeat_ms": 30000,
   "server_time": "2025-09-08T12:35:00Z",
-  "capabilities": ["uploads","search.basic","push.sse"]
+  "capabilities": ["uploads","search.basic","push.poll"]
 }
 ```
 
@@ -431,17 +441,13 @@ Servers MAY send an initial `{"type":"ready"...}` immediately after connect to e
 
 ### 13.1 Pull (Universal)
 
-* **SSE:** `GET /notifications/stream` → `text/event-stream`
-
-  * Event types: `mention`, `dm`, `invite`
-  * Event data JSON: `{ "type":"mention", "room_id":"...", "message_id":"...", "ts":"..." }`
 * **Long‑poll:** `GET /notifications/poll?cursor=&timeout_s=30`
 
   * Response 200: `{ notifications:[...], next_cursor }`
 
 ### 13.2 Push (Optional)
 
-* **Capabilities:** `push.apns`, `push.fcm`, `push.sse` (SSE already covered), `push.poll` (long‑poll).
+* **Capabilities:** `push.apns`, `push.fcm`, `push.poll` (long‑poll).
 * Register: `POST /push/register` body `{ platform:"webpush"|"apns"|"fcm", token, device_id }` → 204
 * Unregister: `DELETE /push/register/{device_id}` → 204
 * Servers SHOULD send push for DMs and mentions respecting user prefs.
@@ -603,7 +609,7 @@ Client sends:
 Server:
 
 ```json
-{"type":"ready","heartbeat_ms":30000,"server_time":"...","capabilities":["uploads","search.basic","push.sse"]}
+{"type":"ready","heartbeat_ms":30000,"server_time":"...","capabilities":["uploads","search.basic","push.poll"]}
 ```
 
 4. Post
